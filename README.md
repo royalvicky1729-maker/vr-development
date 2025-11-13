@@ -4,7 +4,7 @@
 <b>Discipline | <b>Information Technology
 :--|:--|
 <b> Lab | <b> Internship Assessment/Mini Project
-<b> Experiment|     <b> 
+<b> Experiment|     <b> Implement a simulation that measures light loss over a length of fiber to find the attenuation constant.
 
 ### About the Experiment 
 
