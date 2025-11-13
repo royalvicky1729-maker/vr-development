@@ -20,5 +20,5 @@ Fill a brief description of this experiment here
 
 SrNo | Name | Faculty or Student | Department| Institute | Email id
 :--|:--|:--|:--|:--|:--|
-1 | . | . | . | . | .
+1 | Vikas Kumar Bind | Dr. Ashutosh Tiwari | Information Technology | Rajkiya Engineering College Banda | royalvicky1729@gmail.com
 2 | . | . | . | . | .
