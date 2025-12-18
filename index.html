@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Fiber Optic Attenuation Simulator - Physics Lab</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            overflow: hidden;
+        }
+        #header {
+            position: absolute; top: 0; left: 0; right: 0; 
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 12px; text-align: center;
+            font-size: 22px; font-weight: bold; z-index: 200;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        #controls { 
+            position: absolute; top: 70px; left: 15px; z-index: 100; 
+            background: rgba(255,255,255,0.95); 
+            padding: 20px; border-radius: 12px; 
+            border: 2px solid #4CAF50; box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px); width: 220px;
+        }
+        #results { 
+            position: absolute; top: 70px; right: 15px; z-index: 100; 
+            background: rgba(255,255,255,0.95); 
+            padding: 20px; border-radius: 12px; 
+            border: 2px solid #2196F3; width: 260px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px);
+        }
+        input, button { 
+            margin: 6px 0; padding: 10px; border: 2px solid #ddd; 
+            border-radius: 6px; font-size: 13px; width: 100%; 
+            box-sizing: border-box; transition: all 0.3s;
+        }
+        input:focus { border-color: #4CAF50; outline: none; box-shadow: 0 0 8px rgba(76,175,80,0.3); }
+        button { 
+            background: linear-gradient(45deg, #4CAF50, #45a049); 
+            color: white; cursor: pointer; font-weight: bold; 
+            border: none; text-transform: uppercase; letter-spacing: 0.5px; font-size: 12px;
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(76,175,80,0.4); }
+        label { 
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 8px 0 4px; font-weight: 600; color: #333; font-size: 13px;
+        }
+        .value { color: #e91e63; font-weight: bold; font-size: 14px; }
+        canvas { display: block; }
+        #status { 
+            font-size: 13px; padding: 10px; border-radius: 6px; 
+            margin-top: 12px; font-weight: 500; text-align: center;
+        }
+        .success { background: linear-gradient(45deg, #4CAF50, #8BC34A); color: white; }
+        .ready { background: linear-gradient(45deg, #FF9800, #FFC107); color: white; }
+        .lab-elements {
+            position: absolute; bottom: 15px; left: 15px; color: #666; font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">🔬 Fiber Optic Attenuation Experiment</div>
+    
+    <div id="controls">
+        <h3 style="margin: 0 0 15px 0; font-size: 15px;">⚙ Controls</h3>
+        <label>Fiber Length: <span id="lenVal" class="value">1.0m</span></label>
+        <input type="range" id="fiberLength" min="0.5" max="5" step="0.1" value="1">
+        
+        <label>Laser Power: <span id="powerVal" class="value">0 dBm</span></label>
+        <input type="range" id="inputPower" min="-10" max="10" step="0.5" value="0">
+        
+        <label>Attenuation: <span id="alphaVal" class="value">0.2 dB/km</span></label>
+        <input type="range" id="alpha" min="0.1" max="1.0" step="0.05" value="0.2">
+        
+        <button onclick="measureLoss()">📏 Measure Loss</button>
+        <button onclick="resetSetup()">🔄 Reset</button>
+    </div>
+
+    <div id="results">
+        <h3 style="margin: 0 0 15px 0; font-size: 15px;">📋 Observations</h3>
+        <div style="font-size: 13px; margin-bottom: 8px;">
+            <b>P<sub>in</sub>:</b> <span id="pIn" class="value">0</span> dBm
+        </div>
+        <div style="font-size: 13px; margin-bottom: 8px;">
+            <b>P<sub>out</sub>:</b> <span id="pOut">--</span> dBm
+        </div>
+        <div style="font-size: 13px; margin-bottom: 12px;">
+            <b>Loss:</b> <span id="loss">--</span> dB
+        </div>
+        <hr style="margin: 12px 0;">
+        <div style="font-size: 20px; color: #e91e63; font-weight: bold; text-align: center;">
+            α = <span id="calcAlpha" style="font-size: 24px;">--</span> dB/km
+        </div>
+        <div id="status" class="ready">Ready for Experiment</div>
+    </div>
+
+    <div class="lab-elements">
+        🧪 AKTU Physics Laboratory
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // 3D Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf8f9ff);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.8;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2.3;
+        controls.minDistance = 2;
+        controls.maxDistance = 10;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(5, 8, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        // Lab Floor
+        const floorMat = new THREE.MeshLambertMaterial({ color: 0xf0f0f0 });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1.2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Lab Table
+        const tableMat = new THREE.MeshLambertMaterial({ color: 0x2c5530 });
+        const tableTop = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.08, 3.2), tableMat);
+        tableTop.position.set(0, -0.38, 0);
+        tableTop.receiveShadow = true;
+        tableTop.castShadow = true;
+        scene.add(tableTop);
+
+        // Table legs
+        const legMat = new THREE.MeshLambertMaterial({ color: 0x1a3d22 });
+        for(let i = 0; i < 4; i++) {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.7, 0.07), legMat);
+            leg.position.set((i%2 ? -2.4 : 2.4), -0.85, (i<2 ? -1.3 : 1.3));
+            leg.castShadow = true;
+            scene.add(leg);
+        }
+
+        // Materials
+        let laserMat, detectorMat, fiberMat, connectorMat;
+
+        // Laser Source with Dynamic Beam
+        const laserGroup = new THREE.Group();
+        const laserBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.9), new THREE.MeshLambertMaterial({color: 0x333333}));
+        laserMat = new THREE.MeshPhongMaterial({ color: 0xff1744, emissive: 0x220011, shininess: 100 });
+        const laserBody = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 1.1), laserMat);
+        
+        // Dynamic Laser Beam (visible with power change)
+        let laserBeam;
+        
+        laserGroup.add(laserBase, laserBody);
+        laserGroup.position.set(-2.3, -0.32, 0);
+        laserGroup.castShadow = true;
+        scene.add(laserGroup);
+
+        // Fiber Group
+        let fiberMesh;
+        const fiberGroup = new THREE.Group();
+        fiberGroup.position.y = -0.32;
+        scene.add(fiberGroup);
+
+        // Detector
+        const detectorGroup = new THREE.Group();
+        const detectorBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.9), new THREE.MeshLambertMaterial({color: 0x333333}));
+        detectorMat = new THREE.MeshPhongMaterial({ color: 0x3f51b5, emissive: 0x0a0a22, shininess: 100 });
+        const detectorBody = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 1.1), detectorMat);
+        const detectorFace = new THREE.Mesh(new THREE.CircleGeometry(0.13), new THREE.MeshBasicMaterial({ color: 0x4caf50 }));
+        detectorFace.position.set(0.6, 0.04, 0);
+        detectorGroup.add(detectorBase, detectorBody, detectorFace);
+        detectorGroup.position.set(2.3, -0.32, 0);
+        detectorGroup.castShadow = true;
+        scene.add(detectorGroup);
+
+        // Power Meter
+        const powerMeter = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.4), new THREE.MeshPhongMaterial({color: 0x00aa00, emissive: 0x002200}));
+        powerMeter.position.set(0, -0.15, -1.9);
+        scene.add(powerMeter);
+
+        camera.position.set(0, 1.2, 4);
+        camera.lookAt(0, -0.3, 0);
+
+        // Current laser power
+        let currentLaserPower = 0;
+
+        const clock = new THREE.Clock();
+
+        function updateLaserBeam() {
+            // Remove old beam
+            if (laserBeam) {
+                laserGroup.remove(laserBeam);
+            }
+
+            // Calculate beam intensity based on power (-10 to +10 dBm → 0.1 to 1.0)
+            const powerIntensity = Math.max(0.1, (currentLaserPower + 10) / 20);
+            
+            // Create new beam with variable intensity
+            const beamGeometry = new THREE.CylinderGeometry(0.008 * powerIntensity, 0.015 * powerIntensity, 0, 8);
+            const beamMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff4444, 
+                transparent: true, 
+                opacity: 0.6 * powerIntensity,
+                emissive: 0x440000,
+                emissiveIntensity: powerIntensity * 0.5
+            });
+            laserBeam = new THREE.Mesh(beamGeometry, beamMaterial);
+            laserBeam.rotation.z = Math.PI / 2;
+            laserBeam.position.set(0.6, 0.07, 0);
+            laserGroup.add(laserBeam);
+
+            // Update laser body glow
+            laserMat.emissive.setHex(0x220011 * (0.5 + powerIntensity * 0.5));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateFiber();
+            renderer.render(scene, camera);
+        }
+
+        function updateFiber() {
+            const length = parseFloat(document.getElementById('fiberLength').value);
+            fiberGroup.clear();
+            
+            if(length > 0.5) {
+                fiberMat = new THREE.MeshPhongMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.6, shininess: 100 });
+                connectorMat = new THREE.MeshPhongMaterial({ color: 0x607d8b, shininess: 100 });
+                
+                const leftConn = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.18, 12), connectorMat);
+                leftConn.position.set(-2.3 + 0.62, 0, 0);
+                const rightConn = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.18, 12), connectorMat);
+                rightConn.position.set(2.3 - 0.62, 0, 0);
+                fiberGroup.add(leftConn, rightConn);
+                
+                const curvePoints = [
+                    new THREE.Vector3(-1.68, 0, 0),
+                    new THREE.Vector3(-0.8 * length, Math.sin(length * 0.4) * 0.08, 0),
+                    new THREE.Vector3(0.8 * length - 1.68, Math.sin(length * 0.4) * 0.08, 0),
+                    new THREE.Vector3(1.68, 0, 0)
+                ];
+                const fiberGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePoints), 64, 0.055, 12, false);
+                fiberMesh = new THREE.Mesh(fiberGeometry, fiberMat);
+                fiberMesh.castShadow = true;
+                fiberGroup.add(fiberMesh);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('fiberLength').addEventListener('input', function() {
+            document.getElementById('lenVal').textContent = this.value + 'm';
+            updateFiber();
+        });
+
+        document.getElementById('inputPower').addEventListener('input', function() {
+            document.getElementById('powerVal').textContent = this.value + ' dBm';
+            currentLaserPower = parseFloat(this.value);
+            updateLaserBeam();
+        });
+
+        document.getElementById('alpha').addEventListener('input', function() {
+            document.getElementById('alphaVal').textContent = this.value + ' dB/km';
+        });
+
+        function measureLoss() {
+            const L = parseFloat(document.getElementById('fiberLength').value) / 1000;
+            const P_in = parseFloat(document.getElementById('inputPower').value);
+            const alpha = parseFloat(document.getElementById('alpha').value);
+            
+            const P_out = P_in - alpha * L;
+            const loss = alpha * L;
+            
+            document.getElementById('pIn').textContent = P_in;
+            document.getElementById('pOut').textContent = P_out.toFixed(3);
+            document.getElementById('loss').textContent = loss.toFixed(3);
+            document.getElementById('calcAlpha').textContent = alpha.toFixed(3);
+            
+            const status = document.getElementById('status');
+            status.textContent = '✅ Measurement Complete!';
+            status.className = 'success';
+            
+            // Brief detector glow on measurement
+            detectorMat.emissive.setHex(0x0a0a22 * 3);
+            setTimeout(() => {
+                detectorMat.emissive.setHex(0x0a0a22);
+                status.textContent = 'Ready for Next Reading';
+                status.className = 'ready';
+            }, 2500);
+        }
+
+        function resetSetup() {
+            document.getElementById('fiberLength').value = 1;
+            document.getElementById('inputPower').value = 0;
+            document.getElementById('alpha').value = 0.2;
+            document.getElementById('lenVal').textContent = '1.0m';
+            document.getElementById('powerVal').textContent = '0 dBm';
+            document.getElementById('alphaVal').textContent = '0.2 dB/km';
+            currentLaserPower = 0;
+            updateFiber();
+            updateLaserBeam();
+            document.getElementById('status').textContent = '🔄 Reset Complete';
+            document.getElementById('status').className = 'ready';
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize
+        updateLaserBeam();
+        updateFiber();
+        animate();
+    </script>
+</body>
+</html>
